@@ -2,7 +2,9 @@ from typing import Set
 
 try:
     import spconv.pytorch as spconv
-except:
+except Exception as ex:
+    print("using spconv instead of spconv.pytorch")
+    print(ex)
     import spconv as spconv
 
 import torch.nn as nn

@@ -1,14 +1,15 @@
+
 import torch
 import yaml
 import numpy as np
 from easydict import EasyDict
 from pcdet.utils.compatibility_utils import get_target_domain_cfg, get_lidar
-from demo_dataset import DemoDataset
+from tools.demo.demo_dataset import DemoDataset
 from pcdet.utils import common_utils
 from torch.utils.data import DataLoader
 from pcdet.models import build_network, load_data_to_gpu
 from functools import partial
-from tqdm import tqdm 
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 
@@ -20,9 +21,10 @@ def load_yaml(fname):
             ret = yaml.safe_load(f)
     return EasyDict(ret)
 
-def load_dataset_and_model(data_dir, ckpt_path, model_yaml, ext='.pcd'):
+def load_dataset_and_model(data_dir, ckpt_path, model_yaml, dataset_config_path, ext='.pcd'):
+    print("data dir", data_dir)
     cfg = load_yaml(model_yaml)
-    target_domain_cfg = get_target_domain_cfg(cfg,'custom',sweeps=4,use_tta=3) # we later modify demo_dataset.data_augmentor.augmentor_configs.DISABLE_AUG_LIST
+    target_domain_cfg = get_target_domain_cfg(cfg,'custom', dataset_config_path=dataset_config_path,sweeps=4,use_tta=3) # we later modify demo_dataset.data_augmentor.augmentor_configs.DISABLE_AUG_LIST
     logger = common_utils.create_logger()
     demo_dataset = DemoDataset(
         dataset_cfg=target_domain_cfg, class_names=target_domain_cfg.CLASS_NAMES, training=False,
@@ -34,10 +36,10 @@ def load_dataset_and_model(data_dir, ckpt_path, model_yaml, ext='.pcd'):
     model.cuda()
     model.eval()
     return demo_dataset, model
-    
+
 def generate_predictions(model, dataset, batch_size, sweeps, tta_setting):
     dataset.max_sweeps = sweeps
-    
+
     # Configure tta
     if tta_setting == 0:
         dataset.data_augmentor.augmentor_configs.DISABLE_AUG_LIST = ['random_world_flip','random_world_rotation']
@@ -56,6 +58,7 @@ def generate_predictions(model, dataset, batch_size, sweeps, tta_setting):
         shuffle=False, collate_fn=dataset.collate_batch,
         drop_last=False, sampler=None, timeout=0, worker_init_fn=partial(common_utils.worker_init_fn, seed=None)
     )
+    #print("dataloader", dataloader)
     det_annos = []
     for i, batch_dict in tqdm(enumerate(dataloader), total=len(dataloader)):
         load_data_to_gpu(batch_dict)
@@ -82,41 +85,41 @@ def format_ensemble_preds(det_annos):
 
 
 ## ============ VISUALIZATION FUNCTIONS =================
-def plot_boxes(ax, boxes_lidar, color=[0,0,1], 
+def plot_boxes(ax, boxes_lidar, color=[0,0,1],
                scores=None, label=None, cur_id=0, limit_range=None,
-               source_id=None, source_labels=None, alpha=1.0, 
+               source_id=None, source_labels=None, alpha=1.0,
                linestyle='solid',linewidth=1.0, fontsize=12,
                show_score=True):
     if limit_range is not None:
         centroids = boxes_lidar[:,:3]
-        mask = mask_points_by_range(centroids, limit_range) 
+        mask = mask_points_by_range(centroids, limit_range)
         boxes_lidar = boxes_lidar[mask]
         if source_labels is not None:
-            source_labels = source_labels[mask] 
+            source_labels = source_labels[mask]
         if source_id is not None:
-            source_id = source_id[mask] 
+            source_id = source_id[mask]
         if scores is not None:
             scores = scores[mask]
-        
+
     box_pts = boxes_to_corners_3d(boxes_lidar)
-    box_pts_bev = box_pts[:,:5,:2]        
-    cmap = np.array(plt.get_cmap('tab20').colors)    
+    box_pts_bev = box_pts[:,:5,:2]
+    cmap = np.array(plt.get_cmap('tab20').colors)
     prev_id = -1
-    for idx, box in enumerate(box_pts_bev): 
+    for idx, box in enumerate(box_pts_bev):
         if source_id is not None:
             cur_id = source_id[idx]
             color = cmap[cur_id % len(cmap)]
             label = None
             if source_labels is not None:
                 label = source_labels[idx]
-        
+
         if cur_id != prev_id:
             ax.plot(box[:,0],box[:,1], color=color, label=label, alpha=alpha, linestyle=linestyle, linewidth=linewidth)
             prev_id = cur_id
         else:
             ax.plot(box[:,0],box[:,1], color=color, alpha=alpha, linestyle=linestyle, linewidth=linewidth)
         if (scores is not None) and show_score:
-            ax.text(box[0,0], box[0,1], f'{scores[idx]:0.4f}', c=color, fontsize=fontsize)                             
+            ax.text(box[0,0], box[0,1], f'{scores[idx]:0.4f}', c=color, fontsize=fontsize)
 
 def mask_points_by_range(points, limit_range):
     mask = (points[:, 0] >= limit_range[0]) & (points[:, 0] <= limit_range[3]) \
@@ -182,8 +185,8 @@ def boxes_to_corners_3d(boxes3d):
     return corners3d.numpy() if is_numpy else corners3d
 
 
-def visualize_bev(target_set, idx, ps_dict=None, ps_dict2=None, detection_sets=None, tracks=None, 
-                  ps_dict_legend=None, ps_dict2_legend=None, tracks_legend=None, 
+def visualize_bev(target_set, idx, ps_dict=None, ps_dict2=None, detection_sets=None, tracks=None,
+                  ps_dict_legend=None, ps_dict2_legend=None, tracks_legend=None,
                   point_cloud_range=80, show_legend=True,
                   show_score=True, conf_th=0.2, above_pos_th=False, figsize=(9,9),
                   show_trk_score=False, frame2box_key=None):
@@ -192,7 +195,7 @@ def visualize_bev(target_set, idx, ps_dict=None, ps_dict2=None, detection_sets=N
     frame2box_key: (only after refine_veh_labels)
     """
     frame_id = target_set.infos[idx]['frame_id']
-    pts = get_lidar(target_set, frame_id)    
+    pts = get_lidar(target_set, frame_id)
     limit_range = [-point_cloud_range, -point_cloud_range, -4.0, point_cloud_range, point_cloud_range, 2.0]
     mask = mask_points_by_range(pts, limit_range)
     fig = plt.figure(figsize=figsize)
@@ -202,20 +205,20 @@ def visualize_bev(target_set, idx, ps_dict=None, ps_dict2=None, detection_sets=N
 
     if detection_sets:
         conf_mask = detection_sets[idx]['score'] >= conf_th
-        plot_boxes(ax, detection_sets[idx]['boxes_lidar'][conf_mask], 
+        plot_boxes(ax, detection_sets[idx]['boxes_lidar'][conf_mask],
                 scores=detection_sets[idx]['score'][conf_mask],
                 source_id=detection_sets[idx]['source_id'][conf_mask] if 'source_id' in detection_sets[idx].keys() else None,
                 source_labels=detection_sets[idx]['source'][conf_mask] if 'source' in detection_sets[idx].keys() else None,
                 color=[0,0.8,0] if 'source_id' not in detection_sets[idx].keys() else [0,0,1],
                 limit_range=limit_range, alpha=0.5 if 'source_id' in detection_sets[idx].keys() else 1.0,
                 label='detection_sets' if 'source_id' not in detection_sets[idx].keys() else None, show_score=show_score)
-        
+
     if ps_dict2:
         combined_mask = ps_dict2[frame_id]['gt_boxes'][:,8] >= conf_th
         if above_pos_th:
             above_pos_mask = ps_dict2[frame_id]['gt_boxes'][:,7] > 0
             combined_mask = np.logical_and(combined_mask, above_pos_mask)
-        plot_boxes(ax, ps_dict2[frame_id]['gt_boxes'][combined_mask], 
+        plot_boxes(ax, ps_dict2[frame_id]['gt_boxes'][combined_mask],
                 scores=ps_dict2[frame_id]['gt_boxes'][combined_mask][:,8],
                 label='ps labels 2' if ps_dict2_legend is None else ps_dict2_legend, color=[0.8,0,0],
                 limit_range=limit_range, alpha=1, show_score=show_score)
@@ -225,12 +228,12 @@ def visualize_bev(target_set, idx, ps_dict=None, ps_dict2=None, detection_sets=N
         if above_pos_th:
             above_pos_mask = ps_dict[frame_id]['gt_boxes'][:,7] > 0
             combined_mask = np.logical_and(combined_mask, above_pos_mask)
-        plot_boxes(ax, ps_dict[frame_id]['gt_boxes'][combined_mask], 
+        plot_boxes(ax, ps_dict[frame_id]['gt_boxes'][combined_mask],
                 scores=ps_dict[frame_id]['gt_boxes'][combined_mask][:,8],
-                label='ps labels' if ps_dict_legend is None else ps_dict_legend, 
+                label='ps labels' if ps_dict_legend is None else ps_dict_legend,
                 color=[0,0.8,0], fontsize=14, linewidth=1.5,
                 limit_range=limit_range, alpha=1, show_score=show_score)
-        
+
     if tracks:
         from pcdet.utils import compatibility_utils as compat
         from pcdet.utils.transform_utils import world_to_ego
@@ -240,10 +243,10 @@ def visualize_bev(target_set, idx, ps_dict=None, ps_dict2=None, detection_sets=N
         score_idx = 7 if show_trk_score else 8
         _, track_boxes_ego = world_to_ego(pose, boxes=track_boxes)
         if track_boxes_ego.shape[0] != 0:
-            plot_boxes(ax, track_boxes_ego[:,:7], 
+            plot_boxes(ax, track_boxes_ego[:,:7],
                     scores=track_boxes_ego[:,score_idx],
                     label='tracked boxes' if tracks_legend is None else tracks_legend, color=[1,0,0], linestyle='dotted',
-                    limit_range=limit_range, alpha=1, show_score=show_score) 
+                    limit_range=limit_range, alpha=1, show_score=show_score)
 
     ax.set_title(f'Frame #{idx}, FID:{frame_id}')
     ax.set_aspect('equal')
@@ -251,4 +254,3 @@ def visualize_bev(target_set, idx, ps_dict=None, ps_dict2=None, detection_sets=N
         ax.legend(loc='upper right')
     plt.show()
     return fig, ax
-                    

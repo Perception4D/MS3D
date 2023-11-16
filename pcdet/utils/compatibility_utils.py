@@ -1,5 +1,6 @@
 from pathlib import Path
 import numpy as np
+import os
 """
 This file facilitates compatbility between different datasets, including loading in different target domain configs
 """
@@ -14,10 +15,13 @@ def get_pose(dataset, frame_id):
     elif dataset.dataset_cfg.DATASET in ['NuScenesDataset','LyftDataset']:
         infos_idx = dataset.frameid_to_idx[frame_id]
         # transform from lidar frame -> vehicle ego frame then vehicle ego frame -> global frame
-        pose = np.dot(np.linalg.inv(dataset.infos[infos_idx]['car_from_global']), 
+        pose = np.dot(np.linalg.inv(dataset.infos[infos_idx]['car_from_global']),
                np.linalg.inv(dataset.infos[infos_idx]['ref_from_car']))
         return pose
     elif dataset.dataset_cfg.DATASET in ['WaymoDataset','CustomDataset']:
+        infos_idx = dataset.frameid_to_idx[frame_id]
+        return dataset.infos[infos_idx]['pose']
+    elif dataset.dataset_cfg.DATASET in ['PcapDataset']:
         infos_idx = dataset.frameid_to_idx[frame_id]
         return dataset.infos[infos_idx]['pose']
     else:
@@ -27,7 +31,7 @@ def get_lidar(dataset, frame_id):
     """Returns 1-frame point cloud"""
     infos_idx = dataset.frameid_to_idx[frame_id]
     if dataset.dataset_cfg.DATASET == 'ONCEDataset':
-        return dataset.get_lidar(dataset.infos[infos_idx]['sequence_id'], frame_id)    
+        return dataset.get_lidar(dataset.infos[infos_idx]['sequence_id'], frame_id)
     elif dataset.dataset_cfg.DATASET == 'KittiDataset':
         pc_info = dataset.infos[infos_idx]['point_cloud']
         return dataset.get_lidar_seq(pc_info['lidar_sequence'], pc_info['sample_idx'])
@@ -38,19 +42,24 @@ def get_lidar(dataset, frame_id):
         sample_idx = get_sample_idx(dataset, frame_id)
         return dataset.get_lidar(sequence_name, sample_idx)
     elif dataset.dataset_cfg.DATASET == 'CustomDataset':
-        return dataset.get_lidar(dataset.infos[infos_idx]['lidar_path'])    
+        return dataset.get_lidar(dataset.infos[infos_idx]['lidar_path'])
+    elif dataset.dataset_cfg.DATASET == 'PcapDataset':
+        return dataset.get_point_cloud(infos_idx)
     else:
         raise NotImplementedError
 
 def get_frame_id(dataset, info):
     """Frame IDs should be strings"""
     if dataset.dataset_cfg.DATASET == 'ONCEDataset':
-        return info['frame_id']        
+        return info['frame_id']
     elif dataset.dataset_cfg.DATASET == 'KittiDataset':
         return info['point_cloud']['frame_id']
     elif dataset.dataset_cfg.DATASET in ['NuScenesDataset','LyftDataset']:
         return Path(info['lidar_path']).stem
     elif dataset.dataset_cfg.DATASET in ['WaymoDataset','CustomDataset']:
+        return info['frame_id']
+    elif dataset.dataset_cfg.DATASET in ['PcapDataset']:
+        #print("frame id", info['frame_id'],type(info['frame_id']))
         return info['frame_id']
     else:
         raise NotImplementedError
@@ -60,12 +69,14 @@ def get_sequence_name(dataset, frame_id):
     infos_idx = dataset.frameid_to_idx[frame_id]
     if dataset.dataset_cfg.DATASET == 'ONCEDataset':
         return dataset.infos[infos_idx]['sequence_id']
-    elif dataset.dataset_cfg.DATASET == 'KittiDataset':        
+    elif dataset.dataset_cfg.DATASET == 'KittiDataset':
         return dataset.infos[infos_idx]['point_cloud']['lidar_sequence']
     elif dataset.dataset_cfg.DATASET in ['NuScenesDataset','LyftDataset']:
         return dataset.infos[infos_idx]['scene_name']
     elif dataset.dataset_cfg.DATASET in ['WaymoDataset','CustomDataset']:
         return dataset.infos[infos_idx]['point_cloud']['lidar_sequence']
+    elif dataset.dataset_cfg.DATASET in ['PcapDataset']:
+        return "demo_sequence"
     else:
         raise NotImplementedError
 
@@ -75,32 +86,36 @@ def get_sample_idx(dataset, frame_id):
     each sequence
     """
     infos_idx = dataset.frameid_to_idx[frame_id]
-    if dataset.dataset_cfg.DATASET == 'ONCEDataset':        
+    if dataset.dataset_cfg.DATASET == 'ONCEDataset':
         return dataset.infos[infos_idx]['sample_idx']
     elif dataset.dataset_cfg.DATASET == 'KittiDataset':
         return dataset.infos[infos_idx]['point_cloud']['sample_idx']
     elif dataset.dataset_cfg.DATASET in ['NuScenesDataset','LyftDataset']:
-        return dataset.infos[infos_idx]['sample_idx']        
+        return dataset.infos[infos_idx]['sample_idx']
     elif dataset.dataset_cfg.DATASET in ['WaymoDataset','CustomDataset']:
         return dataset.infos[infos_idx]['point_cloud']['sample_idx']
+    elif dataset.dataset_cfg.DATASET in ['PcapDataset']:
+        return infos_idx
     else:
-        raise NotImplementedError    
+        raise NotImplementedError
 
 def get_timestamp(dataset, frame_id):
     """Timestamp should be numerical, not a string"""
     infos_idx = dataset.frameid_to_idx[frame_id]
     if dataset.dataset_cfg.DATASET == 'ONCEDataset':
         return dataset.infos[infos_idx]['timestamp']
-    elif dataset.dataset_cfg.DATASET == 'KittiDataset':        
+    elif dataset.dataset_cfg.DATASET == 'KittiDataset':
         return dataset.infos[infos_idx]['point_cloud']['timestamp']
     elif dataset.dataset_cfg.DATASET in ['NuScenesDataset', 'LyftDataset']:
-        return dataset.infos[infos_idx]['timestamp']  
+        return dataset.infos[infos_idx]['timestamp']
     elif dataset.dataset_cfg.DATASET == 'WaymoDataset':
         return dataset.infos[infos_idx]['metadata']['timestamp_micros']
     elif dataset.dataset_cfg.DATASET == 'CustomDataset':
         return dataset.infos[infos_idx]['timestamp']
+    elif dataset.dataset_cfg.DATASET == 'PcapDataset':
+        return dataset.infos[infos_idx]['timestamp']
     else:
-        raise NotImplementedError                
+        raise NotImplementedError
 
 def get_gt_boxes(dataset, frame_id):
     infos_idx = dataset.frameid_to_idx[frame_id]
@@ -126,13 +141,13 @@ def get_gt_names(dataset, frame_id):
     elif dataset.dataset_cfg.DATASET in ['WaymoDataset','CustomDataset']:
         return dataset.infos[infos_idx]['annos']['name']
     else:
-        raise NotImplementedError        
+        raise NotImplementedError
 
-def get_target_domain_cfg(cfg, dataset_name, sweeps, custom_target_scenes=False, use_tta=0):
+def get_target_domain_cfg(cfg, dataset_name, sweeps, custom_target_scenes=False, use_tta=0, dataset_config_path="/MS3D/"):
     """
     Simplify the testing of a single pre-trained model on multiple target domains
     by adding in target dataset configs (i.e. DATA_CONFIG_TAR) rather than having
-    to duplicate the yaml file and manually specify a DATA_CONFIG_TAR for each new 
+    to duplicate the yaml file and manually specify a DATA_CONFIG_TAR for each new
     target domain.
 
     use_tta = 0: no_tta, 1: rwf, 2: rwr, 3: rwr+rwf
@@ -146,29 +161,29 @@ def get_target_domain_cfg(cfg, dataset_name, sweeps, custom_target_scenes=False,
             except:
                 ret = yaml.safe_load(f)
         return ret
-    
+
     # Modify cfg in-place to add DATA_CONFIG_TAR
-    cfg.DATA_CONFIG_TAR = {}        
-        
+    cfg.DATA_CONFIG_TAR = {}
+
     if dataset_name == 'nuscenes':
-        target_base_config = load_yaml('/MS3D/tools/cfgs/dataset_configs/nuscenes_dataset_da.yaml')
+        target_base_config = load_yaml(os.path.join(dataset_config_path, 'tools/cfgs/dataset_configs/nuscenes_dataset_da.yaml'))
         target_base_config['MAX_SWEEPS'] = sweeps
     elif dataset_name == 'waymo':
-        target_base_config = load_yaml('/MS3D/tools/cfgs/dataset_configs/waymo_dataset_multiframe_da.yaml')
+        target_base_config = load_yaml(os.path.join(dataset_config_path, 'tools/cfgs/dataset_configs/waymo_dataset_multiframe_da.yaml'))
         target_base_config['SEQUENCE_CONFIG']['SAMPLE_OFFSET'] = [-int(sweeps-1), 0]
     elif dataset_name == 'kitti_raw':
-        target_base_config = load_yaml('/MS3D/tools/cfgs/dataset_configs/kitti_raw_dataset_da.yaml')
+        target_base_config = load_yaml(os.path.join(dataset_config_path, 'tools/cfgs/dataset_configs/kitti_raw_dataset_da.yaml'))
         target_base_config['SEQUENCE_CONFIG']['SAMPLE_OFFSET'] = [-int(sweeps-1), 0]
     elif dataset_name == 'lyft':
-        target_base_config = load_yaml('/MS3D/tools/cfgs/dataset_configs/lyft_dataset_da.yaml')
+        target_base_config = load_yaml(os.path.join(dataset_config_path, 'tools/cfgs/dataset_configs/lyft_dataset_da.yaml'))
         target_base_config['MAX_SWEEPS'] = sweeps
     elif dataset_name == 'custom':
-        target_base_config = load_yaml('/MS3D/tools/cfgs/dataset_configs/custom_dataset_da.yaml')
+        target_base_config = load_yaml(os.path.join(dataset_config_path, 'tools/cfgs/dataset_configs/custom_dataset_da.yaml'))
         target_base_config['MAX_SWEEPS'] = sweeps
     else:
         raise NotImplementedError
 
-    cfg.DATA_CONFIG_TAR.update(EasyDict(target_base_config))    
+    cfg.DATA_CONFIG_TAR.update(EasyDict(target_base_config))
     cfg.DATA_CONFIG_TAR.DATA_PROCESSOR = cfg.DATA_CONFIG.DATA_PROCESSOR
     cfg.DATA_CONFIG_TAR.POINT_FEATURE_ENCODING.used_feature_list = cfg.DATA_CONFIG.POINT_FEATURE_ENCODING.used_feature_list
     cfg.DATA_CONFIG_TAR.SAVE_PKL_IN_GROUND_FRAME = True
@@ -178,7 +193,7 @@ def get_target_domain_cfg(cfg, dataset_name, sweeps, custom_target_scenes=False,
     for data_proc in cfg.DATA_CONFIG_TAR.DATA_PROCESSOR:
         if data_proc.NAME == 'shuffle_points':
             data_proc.SHUFFLE_ENABLED.test = False
-    
+
     # if src was pre-trained with timestamp channel, data_config_tar also has to match
     if (cfg.DATA_CONFIG.POINT_FEATURE_ENCODING.src_feature_list[-1] == 'timestamp') and \
         (cfg.DATA_CONFIG_TAR.POINT_FEATURE_ENCODING.src_feature_list[-1] != 'timestamp'):
@@ -198,7 +213,7 @@ def get_target_domain_cfg(cfg, dataset_name, sweeps, custom_target_scenes=False,
         cfg.DATA_CONFIG_TAR.USE_TTA = False
     else:
         cfg.DATA_CONFIG_TAR.USE_TTA = True
-        cfg.DATA_CONFIG_TAR.DATA_AUGMENTOR = {}    
+        cfg.DATA_CONFIG_TAR.DATA_AUGMENTOR = {}
         cfg.DATA_CONFIG_TAR.DATA_AUGMENTOR.AUG_CONFIG_LIST = []
 
         cfg.DATA_CONFIG_TAR.DATA_AUGMENTOR.AUG_CONFIG_LIST.append(EasyDict({'NAME':'random_world_flip',
@@ -214,9 +229,9 @@ def get_target_domain_cfg(cfg, dataset_name, sweeps, custom_target_scenes=False,
         else:
             print('Choose 0, 1, 2 or 3 for use_tta')
             raise NotImplementedError
-        
+
     if custom_target_scenes:
-        cfg.DATA_CONFIG_TAR.USE_CUSTOM_TRAIN_SCENES = True    
-    
+        cfg.DATA_CONFIG_TAR.USE_CUSTOM_TRAIN_SCENES = True
+
     return cfg.DATA_CONFIG_TAR
 
