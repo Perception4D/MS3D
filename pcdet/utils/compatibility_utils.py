@@ -44,7 +44,8 @@ def get_lidar(dataset, frame_id):
     elif dataset.dataset_cfg.DATASET == 'CustomDataset':
         return dataset.get_lidar(dataset.infos[infos_idx]['lidar_path'])
     elif dataset.dataset_cfg.DATASET == 'PcapDataset':
-        return dataset.get_point_cloud(infos_idx)
+        points, timestamp =  dataset.get_point_cloud(infos_idx)
+        return points
     else:
         raise NotImplementedError
 
