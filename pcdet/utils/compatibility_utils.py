@@ -179,7 +179,7 @@ def get_target_domain_cfg(cfg, dataset_name, sweeps, custom_target_scenes=False,
         target_base_config = load_yaml(os.path.join(dataset_config_path, 'tools/cfgs/dataset_configs/lyft_dataset_da.yaml'))
         target_base_config['MAX_SWEEPS'] = sweeps
     elif dataset_name == 'custom':
-        target_base_config = load_yaml(os.path.join(dataset_config_path, 'tools/cfgs/dataset_configs/custom_dataset_da.yaml'))
+        target_base_config = load_yaml(dataset_config_path)
         target_base_config['MAX_SWEEPS'] = sweeps
     else:
         raise NotImplementedError
