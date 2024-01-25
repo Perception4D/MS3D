@@ -1,0 +1,3 @@
+FROM darrenjkt/openpcdet:v0.6.0
+RUN rm -rf /usr/lib/x86_64-linux-gnu/libnv*
+RUN rm -rf /usr/lib/x86_64-linux-gnu/libcuda*
