@@ -6,14 +6,14 @@
 2. Enable/Install WSL2
    - If not already installed, follow the instructions here https://learn.microsoft.com/en-us/windows/wsl/install
 
-3. Clone MS3D directory: https://github.com/darrenjkt/MS3D
+3. Clone MS3D directory: git@github.com:Perception4D/MS3D.git
 
-4. Copy this directory in MS3D source code directory and then work from this directory (`MS3D/wsl2_docker`)
-
-5. Install Docker & CUDA in WSL
+4. Install Docker & CUDA in WSL
    - Start WSL2 command line
+   - go to MS3D/docker_windows directory
    - run `install_docker_and_cuda.sh`
 
 6. Launch the MS3D docker image
    - run `run_docker.sh`
    - in the docker command line, run `docker_init_commands.sh`
+

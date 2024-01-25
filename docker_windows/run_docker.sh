@@ -23,15 +23,15 @@ docker_image="ms3d"
 
 # Start docker image
 docker  run -it --rm \
-$VOLUMES \
-$ENVS \
-$VISUAL \
---mount type=bind,source=$CODE_PATH,target=/MS3D \
---runtime=nvidia \
---gpus $GPU_ID \
---privileged \
---net=host \
---ipc=host \
---shm-size=30G \
---workdir=/MS3D \
-$docker_image
+        $VOLUMES \
+        $ENVS \
+        $VISUAL \
+        --mount type=bind,source=$CODE_PATH,target=/MS3D \
+        --runtime=nvidia \
+        --gpus $GPU_ID \
+        --privileged \
+        --net=host \
+        --ipc=host \
+        --shm-size=30G \
+        --workdir=/MS3D \
+        $docker_image
