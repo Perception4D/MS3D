@@ -141,6 +141,7 @@ def refine_veh_labels(dataset, frame_ids,
 
     # Updates motion-state of track dicts in-place
     matched_trk_ids = motion_state_refinement(tracks_veh_all, tracks_veh_static, frame_ids) # ~ 1:03HR for 18840
+    #print("matched_trk_ids",matched_trk_ids)
 
     # Merge disjointed tracks and assign one box per frame in the ego-vehicle frame
     merge_disjointed_tracks(tracks_veh_all, tracks_veh_static, matched_trk_ids)
@@ -156,6 +157,7 @@ def refine_veh_labels(dataset, frame_ids,
                                                      n_extra_frames=refine_cfg['PROPAGATE_BOXES']['N_EXTRA_FRAMES'],
                                                      degrade_factor=refine_cfg['PROPAGATE_BOXES']['DEGRADE_FACTOR'],
                                                      min_score_clip=refine_cfg['PROPAGATE_BOXES']['MIN_SCORE_CLIP']) # < 1 min for 18840
+
     if save_dir is not None:
         save_data(tracks_veh_static, save_dir, name="tracks_world_veh_static_refined_prop_boxes.pkl")
     return tracks_veh_all, tracks_veh_static
@@ -185,6 +187,31 @@ def refine_ped_labels(tracks_ped, ped_pos_th, track_filtering_cfg, s2e_th=2):
                 del tracks_ped[trk_id]
     return tracks_ped
 
+def refine_cyc_labels(tracks_cyc, cyc_pos_th, track_filtering_cfg, s2e_th=2):
+    """
+    Refine pedestrian labels
+
+    s2e_th: threshold for the distance of first track to the last track. Above s2e_th is counted as a dynamic pedestrian
+
+    """
+    # Classify if track is static or dynamic
+    delete_tracks(tracks_cyc, min_score=cyc_pos_th, num_boxes_abv_score=track_filtering_cfg['MIN_DETS_ABOVE_POS_TH_FOR_TRACKS_PED'])
+    for trk_id in tracks_cyc.keys():
+        tracks_cyc[trk_id]['motion_state'] = get_motion_state(tracks_cyc[trk_id]['boxes'], s2e_th=s2e_th)
+
+    # Delete tracks if less than N tracks
+    delete_tracks(tracks_cyc, min_score=0.0, num_boxes_abv_score=track_filtering_cfg['MIN_NUM_PED_TRACKS'])
+
+    # Set score to ped_pos_th and delete static tracks (unless specified with use_static_ped_tracks)
+    all_ids = list(tracks_cyc.keys())
+    for trk_id in all_ids:
+        mask = tracks_cyc[trk_id]['boxes'][:,7] < cyc_pos_th
+        tracks_cyc[trk_id]['boxes'][:,7][mask] = cyc_pos_th
+        if not track_filtering_cfg['USE_STATIC_PED_TRACKS']:
+            if tracks_cyc[trk_id]['motion_state'] != 1:
+                del tracks_cyc[trk_id]
+    return tracks_cyc
+
 def select_ps_by_th(ps_dict, pos_th):
     """
     Select which labels are not used as pseudo-labels by specifying -ve class label if score < pos_th
@@ -203,7 +230,7 @@ def select_ps_by_th(ps_dict, pos_th):
                                 ps_dict[frame_id]['gt_boxes'][:,8] < pos_th[1])
         ps_dict[frame_id]['gt_boxes'][:,7][ped_mask] = -abs(ps_dict[frame_id]['gt_boxes'][:,7][ped_mask])
 
-        cyc_mask = np.logical_and(abs(ps_dict[frame_id]['gt_boxes'][:,7]) == 2,
+        cyc_mask = np.logical_and(abs(ps_dict[frame_id]['gt_boxes'][:,7]) == 3,
                                 ps_dict[frame_id]['gt_boxes'][:,8] < pos_th[2])
         ps_dict[frame_id]['gt_boxes'][:,7][cyc_mask] = -abs(ps_dict[frame_id]['gt_boxes'][:,7][cyc_mask])
 
@@ -339,6 +366,8 @@ def merge_disjointed_tracks(tracks_all, tracks_static, matched_trk_ids):
             tstatic_tall_idmap[tstatic_id] = []
         tstatic_tall_idmap[tstatic_id].append(tall_id)
 
+    #print("tstatic_tall_idmap", tstatic_tall_idmap)
+
     # Get trk id mapping for 1f -> 16f trk ids
     # here we sort by 16f ids for same reason as above
     tall_tstatic_idmap = {}
@@ -348,6 +377,7 @@ def merge_disjointed_tracks(tracks_all, tracks_static, matched_trk_ids):
         if tall_id not in tall_tstatic_idmap.keys():
             tall_tstatic_idmap[tall_id] = []
         tall_tstatic_idmap[tall_id].append(tstatic_id)
+    #print("tall_tstatic_idmap", tall_tstatic_idmap)
 
     merge_track_ids(tstatic_tall_idmap, tracks_all)
 
@@ -355,6 +385,7 @@ def merge_disjointed_tracks(tracks_all, tracks_static, matched_trk_ids):
     tall_keys = list(tall_tstatic_idmap.keys())
     for tall_id in tall_keys:
         if tall_id not in tracks_all.keys():
+            #print("deleting id1", tall_id)
             del tall_tstatic_idmap[tall_id]
 
     merge_track_ids(tall_tstatic_idmap, tracks_static)
@@ -363,6 +394,7 @@ def merge_disjointed_tracks(tracks_all, tracks_static, matched_trk_ids):
     tstatic_keys = list(tstatic_tall_idmap.keys())
     for tstatic_id in tstatic_keys:
         if tstatic_id not in tracks_static.keys():
+            #print("deleting id2", tstatic_id)
             del tstatic_tall_idmap[tstatic_id]
 
     assign_box_to_frameid(tracks_all)
@@ -386,7 +418,7 @@ def get_track_rolling_kde_interpolation(dataset, tracks_static, window, static_s
 
         if len(trk_frame_inds_set) < window:
             boxes = np.array(list(f2b.values()))
-            boxes = np.insert(boxes, 7,1,1) # Static refinement only done for vehicle class so we hardcode class ID: 1
+            boxes = np.insert(boxes, 7,1,axis=1)#add 1 in 7th position  # Static refinement only done for vehicle class so we hardcode class ID: 1
             kdebox = kbf(boxes, box_weights=boxes[:,-1], bw_score=1.0)
             if kdebox[8] > static_score_th:
                 kdebox[8] = max(kdebox_min_score, kdebox[8])
@@ -427,13 +459,11 @@ def propagate_static_boxes(dataset, tracks_static, score_thresh, min_static_trac
     for trk_id in tqdm(tracks_static.keys(), total=len(tracks_static), desc='propagate_static_boxes'):
         tracks_static[trk_id]['frameid_to_propboxes'] = {}
         roll_kde = tracks_static[trk_id]['frameid_to_rollingkde']
-        #print("roll_kde", roll_kde)
-        #print("frameid_to_propboxes", tracks_static[trk_id]['frameid_to_propboxes'])
         tracks_static[trk_id]['frameid_to_propboxes'].update(roll_kde)
-        #print("frameid_to_propboxes", tracks_static[trk_id]['frameid_to_propboxes'])
+
         if tracks_static[trk_id]['motion_state'] != 0:
             continue
-        #print(tracks_static[trk_id])
+
         boxes = np.array(list(tracks_static[trk_id]['frameid_to_propboxes'].values()))
         if len(boxes[boxes[:,-1] > score_thresh]) < min_static_tracks:
             continue

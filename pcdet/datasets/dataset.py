@@ -37,7 +37,7 @@ class DatasetTemplate(torch_data.Dataset):
             for aug in self.dataset_cfg.DATA_AUGMENTOR.AUG_CONFIG_LIST:
                 if aug['NAME'] not in ['random_world_flip','random_world_rotation']:
                     print(f'ERROR: {aug["NAME"]} not supported for TTA\n')
-                    raise NotImplementedError            
+                    raise NotImplementedError
 
         self.data_processor = DataProcessor(
             self.dataset_cfg.DATA_PROCESSOR, point_cloud_range=self.point_cloud_range,
@@ -53,7 +53,7 @@ class DatasetTemplate(torch_data.Dataset):
             self.depth_downsample_factor = self.data_processor.depth_downsample_factor
         else:
             self.depth_downsample_factor = None
-            
+
     @property
     def mode(self):
         return 'train' if self.training else 'test'
@@ -81,7 +81,7 @@ class DatasetTemplate(torch_data.Dataset):
         Returns:
 
         """
-        
+
         def get_template_prediction(num_samples):
             box_dim = 9 if self.dataset_cfg.get('TRAIN_WITH_SPEED', False) else 7
             ret_dict = {
@@ -97,10 +97,10 @@ class DatasetTemplate(torch_data.Dataset):
             pred_dict = get_template_prediction(pred_scores.shape[0])
             if pred_scores.shape[0] == 0:
                 return pred_dict
-            
+
             if self.dataset_cfg.get('SHIFT_COOR', None):
                 pred_boxes[:, 0:3] -= self.dataset_cfg.SHIFT_COOR
-                
+
             pred_dict['name'] = np.array(class_names)[pred_labels - 1]
             pred_dict['score'] = pred_scores
             pred_dict['boxes_lidar'] = pred_boxes
@@ -124,7 +124,7 @@ class DatasetTemplate(torch_data.Dataset):
                         for idx, noise_rot in enumerate(batch_dict['noise_rot']):
                             unrotated_boxes, _ = augmentor_utils.global_rotation(pred_dicts[idx]['pred_boxes'].cpu(), np.zeros((1,3)), [], return_rot=False, noise_rotation=-noise_rot.item())
                             pred_dicts[idx]['pred_boxes'] = unrotated_boxes.cuda()
-                            
+
         annos = []
         for index, box_dict in enumerate(pred_dicts):
             single_pred_dict = generate_single_sample_dict(box_dict)
@@ -140,9 +140,9 @@ class DatasetTemplate(torch_data.Dataset):
         All labels are loaded with the index: class as 1:Vehicle, 2:Pedestrian.
         Each target dataset.py should have a re-mapping in their __getitem__
         """
-        
-        gt_boxes = self_training_utils.load_ps_label(input_dict['frame_id'])                
-        
+
+        gt_boxes = self_training_utils.load_ps_label(input_dict['frame_id'])
+
         class_of_interest = np.isin(gt_boxes[:, 7], list(psid2clsid.keys()))
         gt_boxes = gt_boxes[class_of_interest]
         gt_scores = gt_boxes[:, 8]
@@ -154,7 +154,7 @@ class DatasetTemplate(torch_data.Dataset):
                 remapped_id = -psid2clsid[abs(cls_id)]
             else:
                 remapped_id = psid2clsid[cls_id]
-            remapped_classes.append(remapped_id)    
+            remapped_classes.append(remapped_id)
         remapped_classes = np.array(remapped_classes)
         gt_boxes = gt_boxes[:, :7]
         gt_names = np.array(self.class_names)[np.abs(remapped_classes.astype(np.int32)) - 1]
@@ -170,7 +170,7 @@ class DatasetTemplate(torch_data.Dataset):
             num_ps_bbox = (remapped_classes == (i+1)).sum()
             input_dict['pos_ps_bbox'][i] = num_ps_bbox
             input_dict['ign_ps_bbox'][i] = num_total_boxes - num_ps_bbox
-        
+
         input_dict.pop('num_points_in_gt', None)
 
     def merge_all_iters_to_one_epoch(self, merge=True, epochs=None):
@@ -235,7 +235,7 @@ class DatasetTemplate(torch_data.Dataset):
 
             assert 'gt_boxes' in data_dict, 'gt_boxes should be provided for training'
             gt_boxes_mask = np.array([n in self.class_names for n in data_dict['gt_names']], dtype=np.bool_)
-            
+
             if 'calib' in data_dict:
                 calib = data_dict['calib']
             data_dict = self.data_augmentor.forward(
@@ -247,7 +247,7 @@ class DatasetTemplate(torch_data.Dataset):
             if 'calib' in data_dict:
                 data_dict['calib'] = calib
 
-        if not self.training and self.dataset_cfg.get('USE_TTA', False):            
+        if not self.training and self.dataset_cfg.get('USE_TTA', False):
             data_dict = self.data_augmentor.forward(
                 data_dict={
                     **data_dict,
@@ -292,7 +292,7 @@ class DatasetTemplate(torch_data.Dataset):
 
     def train(self):
         self.training = True
-        self.data_processor.train()        
+        self.data_processor.train()
 
     @staticmethod
     def collate_batch(batch_list, _unused=False):

@@ -8,7 +8,7 @@ from .detectors import build_detector
 try:
     import kornia
 except:
-    pass 
+    pass
     # print('Warning: kornia is not installed. This package is only required by CaDDN')
 
 
@@ -22,6 +22,7 @@ def build_network(model_cfg, num_class, dataset):
 
 def load_data_to_gpu(batch_dict):
     for key, val in batch_dict.items():
+        #print("load_data_to_gpu", key, val)
         if not isinstance(val, np.ndarray):
             continue
         elif key in ['frame_id', 'metadata', 'calib']:
@@ -31,6 +32,7 @@ def load_data_to_gpu(batch_dict):
         elif key in ['image_shape']:
             batch_dict[key] = torch.from_numpy(val).int().cuda()
         else:
+            #print("load_data_to_gpu : unknown key", key)
             batch_dict[key] = torch.from_numpy(val).float().cuda()
 
 

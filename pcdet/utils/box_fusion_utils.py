@@ -7,7 +7,7 @@ from pathlib import Path
 from pcdet.ops.iou3d_nms import iou3d_nms_utils
 from pcdet.utils import common_utils
 from pcdet.utils.transform_utils import get_rotation_near_weighted_mean
-from tqdm import tqdm 
+from tqdm import tqdm
 
 # Super categories for MS3D compatibility across datasets
 SUPERCATEGORIES = ['Vehicle','Pedestrian','Cyclist']
@@ -23,9 +23,9 @@ SUPER_MAPPING = {'car': 'Vehicle',
 
 def get_matching_boxes(boxes, discard=3, radius=1.0):
     """
-    Get all centroids nearby and discard any detections 
-    that do not match with any other source-detector. 
-    
+    Get all centroids nearby and discard any detections
+    that do not match with any other source-detector.
+
     discard=3 for now (cause KDE fails when it's 3 or less);
     might not be an issue if we use TTA
     """
@@ -33,27 +33,27 @@ def get_matching_boxes(boxes, discard=3, radius=1.0):
     tree = cKDTree(boxes[:,:3])
     qbp_boxes = tree.query_ball_point(boxes[:,:3], r=radius)
     qbp_boxes_filt = [tuple(sets) for sets in qbp_boxes if len(sets) >= discard]
-    
+
     return list(set(qbp_boxes_filt))
 
 def get_sample_inds_with_max_density(samples, kde):
     if len(samples.shape) == 1:
-        density = kde(samples)    
+        density = kde(samples)
     else:
-        density = kde(samples.T)    
+        density = kde(samples.T)
     return np.where(density == density.max())[0][0]
 
 def get_kde(data, bw_method=None, weights=None, return_max=False):
     """
-    Returns the Kernel Density Estimate for a given data. 
+    Returns the Kernel Density Estimate for a given data.
     weights: a list of weights for each box
     return_max: returns the peak value of the KDE
-    """    
+    """
     if len(data.shape) == 1:
         kde = stats.gaussian_kde(data, bw_method=bw_method, weights=weights)
     else:
-        kde = stats.gaussian_kde(data.T, bw_method=bw_method, weights=weights) 
-    
+        kde = stats.gaussian_kde(data.T, bw_method=bw_method, weights=weights)
+
     if not return_max:
         return kde
     else:
@@ -63,10 +63,10 @@ def get_kde(data, bw_method=None, weights=None, return_max=False):
             if return_max:
                 x_ind = np.where(density == density.max())[0][0] # If more than one max, then just choose 0th idx
                 return kde, x[x_ind]
-                
+
         elif len(data.shape) == 2:
             if data.shape[1] == 2:
-                x,y = np.mgrid[min(data[:,0]):max(data[:,0]):20j, 
+                x,y = np.mgrid[min(data[:,0]):max(data[:,0]):20j,
                                min(data[:,1]):max(data[:,1]):20j]
                 xy = np.vstack([x.ravel(), y.ravel()])
                 Z = np.reshape(kde(xy), x.shape)
@@ -77,15 +77,15 @@ def get_kde(data, bw_method=None, weights=None, return_max=False):
             else:
                 # KDE of 3D coordinates is best but slow
                 # If 100j steps are too slow, we can drop to 20j (similar time to 2D kde)
-                x,y,z = np.mgrid[min(data[:,0]):max(data[:,0]):20j, 
+                x,y,z = np.mgrid[min(data[:,0]):max(data[:,0]):20j,
                                  min(data[:,1]):max(data[:,1]):20j,
                                  min(data[:,2]):max(data[:,2]):20j]
                 xyz = np.vstack([x.ravel(), y.ravel(), z.ravel()])
                 Z = np.reshape(kde(xyz), x.shape)
                 x_ind, y_ind, z_ind = np.where(Z == Z.max())
-                
+
                 return kde, np.array([x[x_ind.item()][0][0], y[0][y_ind.item()][0], z[0][0][z_ind.item()]])
-        else: 
+        else:
             raise NotImplementedError
 
 
@@ -96,7 +96,7 @@ def find_nearest_gtbox(frame_gt_boxes, combined_box, return_iou=True):
     """
     gt_tree = cKDTree(frame_gt_boxes[:,:3])
     nearest_gt = gt_tree.query_ball_point(combined_box[:3].reshape(1,-1), r=3.0)
-    if len(nearest_gt[0]) == 0:        
+    if len(nearest_gt[0]) == 0:
         return None
     nearest_gt_box = frame_gt_boxes[nearest_gt[0][0]]
     if return_iou:
@@ -108,7 +108,7 @@ def find_nearest_gtbox(frame_gt_boxes, combined_box, return_iou=True):
         return (nearest_gt_box, iou.item())
     else:
         return nearest_gt_box
-    
+
 def nms(boxes, score, thresh=0.05):
     boxs_gpu = torch.from_numpy(boxes.astype(np.float32) ).cuda()
     scores_gpu = torch.from_numpy(score.astype(np.float32) ).cuda()
@@ -116,7 +116,7 @@ def nms(boxes, score, thresh=0.05):
     nms_inds = iou3d_nms_utils.nms_gpu(boxs_gpu, scores_gpu, thresh=thresh)
     nms_mask = np.zeros(boxs_gpu.shape[0], dtype=bool)
     nms_mask[nms_inds[0].cpu().numpy()] = 1
-    return nms_mask            
+    return nms_mask
 
 def compute_iou(boxes_a, boxes_b):
     gt_box_a, _ = common_utils.check_numpy_to_torch(boxes_a)
@@ -142,7 +142,7 @@ def load_src_paths_txt(src_paths_txt):
     det_annos['det_cls_weights'] = {}
     for idx, pkl_pth_w in enumerate(pkl_pths):
         split_pth_w = pkl_pth_w.split(',')
-        pkl_pth = split_pth_w[0]        
+        pkl_pth = split_pth_w[0]
         if len(split_pth_w) > 1:
             det_cls_weights = np.array(split_pth_w[1:],dtype=np.int32) # Should only have 3 weights in the order: VEH, PED, CYC
         else:
@@ -150,11 +150,11 @@ def load_src_paths_txt(src_paths_txt):
 
         with open(pkl_pth, 'rb') as f:
             if not Path(pkl_pth).is_absolute():
-                pkl_pth = Path(pkl_pth).resolve()     
-            
+                pkl_pth = Path(pkl_pth).resolve()
+
             # label_str = [str(pkl_pth).split('/')[5]]
             # label_str.append(str(pkl_pth).split('/')[-2])
-            # label = '.'.join(label_str) 
+            # label = '.'.join(label_str)
             det_annos[pkl_pth] = pkl.load(f)
             det_annos['det_cls_weights'][pkl_pth] = det_cls_weights
     return det_annos
@@ -176,12 +176,12 @@ def get_detection_sets(det_annos, score_th=0.1):
         frame_dets['boxes_lidar'], frame_dets['score'], frame_dets['source'], frame_dets['source_id'], frame_dets['frame_id'], frame_dets['class_ids'], frame_dets['names'], frame_dets['box_weights'] = [],[],[],[],[],[],[],[]
         for src_id, key in enumerate(src_keys):
             frame_dets['frame_id'] = det_annos[key][idx]['frame_id']
-            score_mask = det_annos[key][idx]['score'] > score_th            
+            score_mask = det_annos[key][idx]['score'] > score_th
             frame_dets['boxes_lidar'].extend(det_annos[key][idx]['boxes_lidar'][score_mask])
             frame_dets['score'].extend(det_annos[key][idx]['score'][score_mask])
             frame_dets['source'].extend([key for i in range(len(det_annos[key][idx]['score'][score_mask]))])
             frame_dets['source_id'].extend([src_id for i in range(len(det_annos[key][idx]['score'][score_mask]))])
-            
+
             # Remap every class_id to the supercategory class_id of 1:veh/car, 2:ped, 3:cyc
             pred_names = det_annos[key][idx]['name'][score_mask]
             superclass_ids = np.array([SUPERCATEGORIES.index(SUPER_MAPPING[name])+1 for name in pred_names])
@@ -216,18 +216,19 @@ def kbf(boxes, box_weights, bw_c=1.0, bw_dim=2.0, bw_ry=0.1, bw_cls=0.5, bw_scor
 
     Centroids are selected rather than aggregated as aggregating can lead to odd centering
     Rotations are selected as it is quite sensitive to aggregation
-    Dimensions/score are the peak value of the KDE since we want to factor in the sizing/cls conf of diff detectors                    
+    Dimensions/score are the peak value of the KDE since we want to factor in the sizing/cls conf of diff detectors
     """
 
     boxes = boxes[box_weights > 0]
     box_weights = box_weights[box_weights > 0]
     if boxes.shape == 0:
         return None
-    
+
     if boxes.shape == 1:
         return boxes
-    
-    if boxes.shape == 2:             
+
+    if boxes.shape == 2:
+
         max_score_ind = np.argmax(boxes[:,8]*box_weights)
         centroid = boxes[max_score_ind,:3]
         dims = np.average(boxes[:,3:6], axis=0, weights=box_weights)
@@ -237,13 +238,14 @@ def kbf(boxes, box_weights, bw_c=1.0, bw_dim=2.0, bw_ry=0.1, bw_cls=0.5, bw_scor
         combined_box = np.hstack([centroid[0], centroid[1], centroid[2], dims[0], dims[1], dims[2], new_heading, new_class, new_score])
 
         return combined_box
-        
+
+    # warning, this is an inside function, kbf function continues below
     def get_kde_value(data, box_weights, bw, return_max=False, verbose=False):
         """
         If data points are too similar, KDE will fail. This is because
-        the covariance matrix is not invertible because the values are too close 
+        the covariance matrix is not invertible because the values are too close
         (zero covariance on some diagonal elements).
-        
+
         In these cases, we just take the weighted average.
         """
         if return_max:
@@ -257,29 +259,29 @@ def kbf(boxes, box_weights, bw_c=1.0, bw_dim=2.0, bw_ry=0.1, bw_cls=0.5, bw_scor
         else:
             try:
                 kde = get_kde(data, return_max=return_max, weights=box_weights, bw_method=bw)
-                new_inds = get_sample_inds_with_max_density(data, kde)    
+                new_inds = get_sample_inds_with_max_density(data, kde)
                 return new_inds
             except Exception as e:
                 if verbose:
                     print(f'data:{data}, error:{e}')
                 return None
-        
-    centroids = boxes[:,:3]    
+
+    centroids = boxes[:,:3]
     det = np.linalg.det(np.cov(centroids.T, rowvar=1,bias=False)) # May throw "RuntimeWarning: Degrees of freedom <= 0 for slice" error if "discard" is set < 4
 
     if det < 1e-7:
-        new_cxy_inds = get_kde_value(centroids[:,:2], box_weights, bw_c, return_max=False)        
+        new_cxy_inds = get_kde_value(centroids[:,:2], box_weights, bw_c, return_max=False)
         if new_cxy_inds is not None:
-            new_cxy = centroids[:,:2][new_cxy_inds]  
+            new_cxy = centroids[:,:2][new_cxy_inds]
         else:
             new_cxy = np.average(centroids[:,:2], axis=0, weights=box_weights)
-              
-        new_cz_inds = get_kde_value(centroids[:,2], box_weights, bw_c, return_max=False)        
+
+        new_cz_inds = get_kde_value(centroids[:,2], box_weights, bw_c, return_max=False)
         if new_cz_inds is not None:
             new_cz = centroids[:,2][new_cz_inds]
         else:
             new_cz = np.average(centroids[:,2], axis=0, weights=box_weights)
-        
+
         new_cxyz = np.hstack([new_cxy, new_cz])
     else:
         new_cxyz_inds = get_kde_value(centroids, box_weights, bw_c, return_max=False)
@@ -287,18 +289,18 @@ def kbf(boxes, box_weights, bw_c=1.0, bw_dim=2.0, bw_ry=0.1, bw_cls=0.5, bw_scor
             new_cxyz = centroids[new_cxyz_inds]
         else:
             new_cxyz = np.average(centroids, axis=0, weights=box_weights)
-    
+
     new_dx = get_kde_value(boxes[:,3], None, bw_dim, return_max=True)
     new_dy = get_kde_value(boxes[:,4], None, bw_dim, return_max=True)
     new_dz = get_kde_value(boxes[:,5], None, bw_dim, return_max=True)
-        
+
     sin_heading = np.sin(boxes[:,6])
-    heading_ind = get_kde_value(sin_heading, box_weights, bw_ry, return_max=False)    
+    heading_ind = get_kde_value(sin_heading, box_weights, bw_ry, return_max=False)
     if heading_ind is not None:
         new_heading = boxes[:,6][heading_ind]
     else:
         new_heading = get_rotation_near_weighted_mean(boxes[:,6])
-    
+
 
     cls_ind = get_kde_value(boxes[:,7], box_weights, bw_cls, return_max=False)
     if cls_ind is not None:
@@ -307,9 +309,9 @@ def kbf(boxes, box_weights, bw_c=1.0, bw_dim=2.0, bw_ry=0.1, bw_cls=0.5, bw_scor
         # Return majority class
         unique, counts = np.unique(boxes[:,7], return_counts=True)
         new_class = int(unique[np.argmax(counts)])
-    
+
     new_score = get_kde_value(boxes[:,8], box_weights, bw_score, return_max=True)
-    
+
     combined_box = np.hstack([new_cxyz[0], new_cxyz[1], new_cxyz[2], new_dx, new_dy, new_dz, new_heading, new_class, new_score])
     return combined_box
 
@@ -319,17 +321,17 @@ def label_fusion(boxes_lidar, discard, radius, nms_thresh=0.05, use_box_weights=
     boxes_lidar (N,9): array of box proposals from src detectors
 
     If box_weights are False or set to [1,1,1], the default weights for KBF is to use the box score.
-    This helps because there are often a lot more lower scoring boxes than higher scoring ones, 
-    which tend to skew the KDE towards a less optimal result. 
-    
-    return: 
+    This helps because there are often a lot more lower scoring boxes than higher scoring ones,
+    which tend to skew the KDE towards a less optimal result.
+
+    return:
         fused_boxes (N,9): fused box proposals
         raw_labels (N,9): box proposals that contributed to the combined box
     """
     matched_inds_list = get_matching_boxes(boxes_lidar, discard=discard, radius=radius)
-        
+
     # Aggregate these into one box
-    combined_frame_boxes, raw_boxes = [], []    
+    combined_frame_boxes, raw_boxes = [], []
     for m_box_inds in matched_inds_list:
 
         matched_boxes = boxes_lidar[list(m_box_inds)]
@@ -338,24 +340,24 @@ def label_fusion(boxes_lidar, discard, radius, nms_thresh=0.05, use_box_weights=
             continue
         box_weights = matched_boxes[:,8]*matched_boxes[:,9] if use_box_weights else matched_boxes[:,8]
         combined_box = kbf(matched_boxes[:,:9], box_weights=box_weights)
-        if combined_box is not None:        
+        if combined_box is not None:
             combined_frame_boxes.append(combined_box)
         # raw_boxes.extend(matched_boxes)
-    
+
     # raw_labels = np.array(raw_boxes).astype(np.float32) if raw_boxes else np.empty((0,9)).astype(np.float32)
     if combined_frame_boxes:
-        fused_boxes = np.array(combined_frame_boxes).astype(np.float32) 
+        fused_boxes = np.array(combined_frame_boxes).astype(np.float32)
         nms_mask = nms(fused_boxes[:,:7], fused_boxes[:,8], thresh=nms_thresh)
-        fused_boxes = fused_boxes[nms_mask]       
+        fused_boxes = fused_boxes[nms_mask]
     else:
         fused_boxes = np.empty((0,9)).astype(np.float32)
-        
+
     return fused_boxes
 
 
-def get_initial_pseudo_labels(detection_sets, cls_kbf_config): 
+def get_initial_pseudo_labels(detection_sets, cls_kbf_config):
     """
-    Combines multiple detection sets into one to get our initial pseudo-label set. Each 
+    Combines multiple detection sets into one to get our initial pseudo-label set. Each
     class is fused separately.
 
     Returns:
@@ -363,8 +365,9 @@ def get_initial_pseudo_labels(detection_sets, cls_kbf_config):
     """
     ps_dict = {}
 
-    for frame_boxes in tqdm(detection_sets, total=len(detection_sets), desc='get initial ps labels'):
+    count_dict = {}
 
+    for frame_boxes in tqdm(detection_sets, total=len(detection_sets), desc='get initial ps labels'):
         boxes_lidar = np.hstack([frame_boxes['boxes_lidar'],
                                  frame_boxes['class_ids'][...,np.newaxis],
                                  frame_boxes['score'][...,np.newaxis],
@@ -372,17 +375,31 @@ def get_initial_pseudo_labels(detection_sets, cls_kbf_config):
 
         ps_label_nms = []
         for class_name in SUPERCATEGORIES:
+
+            if frame_boxes['names'].shape[0] == 0:
+                continue
             cls_mask = (frame_boxes['names'] == class_name)
+            #class_name_arr= np.array(class_name)
+            #print("class", class_name_arr, type(class_name_arr))
+            #print("frame name", frame_boxes['names'], type(frame_boxes['names']))
+           # cls_mask = np.equal(frame_boxes['names'], class_name_arr)
+
+
+
             cls_boxes = boxes_lidar[cls_mask]
             cls_boxes = cls_boxes[cls_boxes[:,9] > 0] # Discard if box weight == 0
+            if class_name not in count_dict.keys():
+                count_dict[class_name]=[]
+            count_dict[class_name].append(cls_boxes.shape[0])
+            #print(cls_boxes.shape[0], "boxes of class",class_name)
             if cls_boxes.shape[0] == 0:
                 continue
             score_mask = cls_boxes[:,8] > cls_kbf_config[class_name]['neg_th']
             cls_kbf_boxes = label_fusion(cls_boxes[score_mask],
-                                           discard=cls_kbf_config[class_name]['discard'], 
-                                           radius=cls_kbf_config[class_name]['radius'], 
-                                           nms_thresh=cls_kbf_config[class_name]['nms'], 
-                                           use_box_weights=True)            
+                                           discard=cls_kbf_config[class_name]['discard'],
+                                           radius=cls_kbf_config[class_name]['radius'],
+                                           nms_thresh=cls_kbf_config[class_name]['nms'],
+                                           use_box_weights=True)
 
             ps_label_nms.extend(cls_kbf_boxes)
 
@@ -390,19 +407,26 @@ def get_initial_pseudo_labels(detection_sets, cls_kbf_config):
             ps_label_nms = np.array(ps_label_nms)
         else:
             ps_label_nms = np.empty((0,9))
-            
+
+
+
         pred_boxes = ps_label_nms[:,:7]
         pred_labels = ps_label_nms[:,7]
         pred_scores = ps_label_nms[:,8]
         gt_box = np.concatenate((pred_boxes,
                                 pred_labels.reshape(-1, 1),
-                                pred_scores.reshape(-1, 1)), axis=1)    
-        
+                                pred_scores.reshape(-1, 1)), axis=1)
+
         # Currently we only store pseudo label information for each frame
         gt_infos = {
             'gt_boxes': gt_box,
-        } 
+        }
         ps_dict[frame_boxes['frame_id']] = gt_infos
+
+    for k,v in count_dict.items():
+        mean = np.mean(v)
+        mx = np.max(v)
+        print("class", k,"mean", mean, "max", mx)
     return ps_dict
 
 
@@ -414,8 +438,8 @@ def wbf(matched_boxes, src_weights=None):
     Weighted Boxes Fusion (WBF)
     This function uses the official WBF code from https://github.com/ZFTurbo/Weighted-Boxes-Fusion
 
-    Solovyev, R., Wang, W., & Gabruseva, T. (2021). Weighted boxes fusion: 
-    Ensembling boxes from different object detection models. Image and Vision 
+    Solovyev, R., Wang, W., & Gabruseva, T. (2021). Weighted boxes fusion:
+    Ensembling boxes from different object detection models. Image and Vision
     Computing, 107, 104117.
 
     WBF in 3D does not deal with headings and expects all box corners to be normalized to [0,1]
@@ -433,7 +457,7 @@ def wbf(matched_boxes, src_weights=None):
         total = max(c2[:,dim])-min(c1[:,dim])
         minval = min(c1[:,dim])
         return normed*total + minval
-    
+
     wbf_score = np.average(matched_boxes[:,-1], axis=0)
     wbf_heading = get_rotation_near_weighted_mean(matched_boxes[:,6])
     wbf_centroid = np.average(matched_boxes[:,:3], axis=0)
@@ -459,7 +483,7 @@ def wbf(matched_boxes, src_weights=None):
     scores_list = matched_boxes[:,8].reshape(-1,1).tolist()
     labels_list = matched_boxes[:,7].reshape(-1,1).tolist()
     weights = np.ones(len(matched_boxes[:,7])).tolist()
-    boxes, scores, labels = weighted_boxes_fusion_3d(boxes_list, scores_list, 
+    boxes, scores, labels = weighted_boxes_fusion_3d(boxes_list, scores_list,
                                                      labels_list, weights=weights, iou_thr=0.2, skip_box_thr=0.0)
     boxes = boxes[0]
     wbf_box = np.array([unnormalize(boxes[0], opp_corner1, opp_corner2, 0),
@@ -468,7 +492,7 @@ def wbf(matched_boxes, src_weights=None):
                        unnormalize(boxes[3], opp_corner1, opp_corner2, 0),
                        unnormalize(boxes[4], opp_corner1, opp_corner2, 1),
                        unnormalize(boxes[5], opp_corner1, opp_corner2, 2)])
-    
+
     l_offset = wbf_box[3]-(wbf_box[3]-wbf_box[0])/2
     w_offset = wbf_box[4]-(wbf_box[4]-wbf_box[1])/2
     h_offset = wbf_box[5]-(wbf_box[5]-wbf_box[2])/2
@@ -498,16 +522,16 @@ def wbf_myimplementation(matched_boxes, src_weights):
             [1, 1, 1], [1, -1, 1], [-1, -1, 1], [-1, 1, 1],
         )) / 2
     corners3d = boxes3d[:, None, 3:6].repeat(1, 8, 1) * template[None, :, :]
-    
+
     # Offset each box relative to the mean of all the box centroids
     centre_offset = matched_boxes[:,:3] - wbf_centroid
     corners_offset = corners3d + centre_offset[..., np.newaxis].reshape(-1,1,3)
-    
+
     # Average the box corners
     wbf_box_corners = np.zeros((8,3))
     for i in range(wbf_box_corners.shape[0]):
         wbf_box_corners[i] = np.average(corners_offset[:,i], axis=0, weights=src_weights)
-        
+
     # Recompute the centroid
     l_halfdist = (max(wbf_box_corners[:,0])-min(wbf_box_corners[:,0]))/2
     l_offset = max(wbf_box_corners[:,0])-l_halfdist
@@ -526,7 +550,7 @@ def wbf_myimplementation(matched_boxes, src_weights):
 
 def wbf_p(matched_boxes, src_weights):
     """
-    Weighted box fusion like WBF but just taking weighted average of box 
+    Weighted box fusion like WBF but just taking weighted average of box
     parameters instead of the corners.
     """
     wbfp = np.average(matched_boxes[:,:6], axis=0, weights=src_weights)

@@ -21,7 +21,7 @@ def get_pose(dataset, frame_id):
     elif dataset.dataset_cfg.DATASET in ['WaymoDataset','CustomDataset']:
         infos_idx = dataset.frameid_to_idx[frame_id]
         return dataset.infos[infos_idx]['pose']
-    elif dataset.dataset_cfg.DATASET in ['PcapDataset']:
+    elif dataset.dataset_cfg.DATASET in ['PcapDataset', 'PcdDataset']:
         infos_idx = dataset.frameid_to_idx[frame_id]
         return dataset.infos[infos_idx]['pose']
     else:
@@ -43,7 +43,7 @@ def get_lidar(dataset, frame_id):
         return dataset.get_lidar(sequence_name, sample_idx)
     elif dataset.dataset_cfg.DATASET == 'CustomDataset':
         return dataset.get_lidar(dataset.infos[infos_idx]['lidar_path'])
-    elif dataset.dataset_cfg.DATASET == 'PcapDataset':
+    elif dataset.dataset_cfg.DATASET in ['PcapDataset', 'PcdDataset']:
         points, timestamp =  dataset.get_point_cloud(infos_idx)
         return points
     else:
@@ -59,7 +59,7 @@ def get_frame_id(dataset, info):
         return Path(info['lidar_path']).stem
     elif dataset.dataset_cfg.DATASET in ['WaymoDataset','CustomDataset']:
         return info['frame_id']
-    elif dataset.dataset_cfg.DATASET in ['PcapDataset']:
+    elif dataset.dataset_cfg.DATASET in ['PcapDataset', 'PcdDataset']:
         #print("frame id", info['frame_id'],type(info['frame_id']))
         return info['frame_id']
     else:
@@ -76,7 +76,7 @@ def get_sequence_name(dataset, frame_id):
         return dataset.infos[infos_idx]['scene_name']
     elif dataset.dataset_cfg.DATASET in ['WaymoDataset','CustomDataset']:
         return dataset.infos[infos_idx]['point_cloud']['lidar_sequence']
-    elif dataset.dataset_cfg.DATASET in ['PcapDataset']:
+    elif dataset.dataset_cfg.DATASET in ['PcapDataset', 'PcdDataset']:
         return "demo_sequence"
     else:
         raise NotImplementedError
@@ -95,7 +95,7 @@ def get_sample_idx(dataset, frame_id):
         return dataset.infos[infos_idx]['sample_idx']
     elif dataset.dataset_cfg.DATASET in ['WaymoDataset','CustomDataset']:
         return dataset.infos[infos_idx]['point_cloud']['sample_idx']
-    elif dataset.dataset_cfg.DATASET in ['PcapDataset']:
+    elif dataset.dataset_cfg.DATASET in ['PcapDataset', 'PcdDataset']:
         return infos_idx
     else:
         raise NotImplementedError
@@ -113,7 +113,7 @@ def get_timestamp(dataset, frame_id):
         return dataset.infos[infos_idx]['metadata']['timestamp_micros']
     elif dataset.dataset_cfg.DATASET == 'CustomDataset':
         return dataset.infos[infos_idx]['timestamp']
-    elif dataset.dataset_cfg.DATASET == 'PcapDataset':
+    elif dataset.dataset_cfg.DATASET in ['PcapDataset', 'PcdDataset']:
         return dataset.infos[infos_idx]['timestamp']
     else:
         raise NotImplementedError
